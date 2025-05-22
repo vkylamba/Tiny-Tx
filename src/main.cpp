@@ -10,7 +10,8 @@
 #define TX_PIN 0
 
 #define SAMPLES 128
-#define SLEEP_CYCLES 37 // 8s × 37 ≈ 5 minutes
+// #define SLEEP_CYCLES 37 // 8s × 37 ≈ 5 minutes
+#define SLEEP_CYCLES 2 // 8s × 2 ≈ 16 seconds
 
 volatile bool watchdogFired = false;
 
@@ -95,7 +96,7 @@ void setup()
     vw_setup(2000);
 
     setupWatchdog();
-    loadEnergyFromEEPROM();
+    // loadEnergyFromEEPROM();
 }
 
 
@@ -119,7 +120,7 @@ void loop()
 
     sendMessage(msg);
     if (abs(energy_Wh - lastSavedEnergy) > 0.1) {
-        saveEnergyToEEPROM();
+        // saveEnergyToEEPROM();
         lastSavedEnergy = energy_Wh;
     }
     // Sleep ~5 minutes using watchdog in 8s chunks
