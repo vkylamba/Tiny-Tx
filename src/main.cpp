@@ -4,7 +4,7 @@
 #include <EEPROM.h>
 #include "rf-raw.h"
 
-#define DEVICE_ID "A1"
+#define DEVICE_ID 1
 #define VOLTAGE_PIN A3
 #define CURRENT_PIN A2
 #define BATT_PIN A0
@@ -51,9 +51,11 @@ void setupRF() {
     setupRFRaw();
 }
 
-void sendMessage(const char *msg)
+void sendMessage(const char *msg, size_t len)
 {
-    sendRFRawMessage(msg);
+    digitalWrite(LED_PIN, HIGH); // Indicate sending
+    sendRFRawMessage(msg, len);  // Update sendRFRawMessage to accept length
+    digitalWrite(LED_PIN, LOW);  // Indicate done
 }
 
 void goToSleep()
@@ -130,12 +132,10 @@ void setup()
     errorBlink(1, false);
 }
 
-char msg[100];
+char msg[150];
 
 void loop()
 {
-
-    errorBlink(1); // All good, blink error code 1s
     float Vrms = computeRMS(VOLTAGE_PIN, true);
     float Irms = computeRMS(CURRENT_PIN, false);
     float power = Vrms * Irms;
@@ -146,17 +146,38 @@ void loop()
     energy_Wh += dt_h > 0 ? power * dt_h : 1;
 
     float battV = readBatteryVoltage();
-    // snprintf(msg, 100, "Hello World!");
-    // sendMessage(msg);
-    snprintf(msg, sizeof(msg),
-             "ID:%s V:%.0f I:%.3f P:%.1f E:%.1f B:%.2f",
-             DEVICE_ID, Vrms, Irms, power, energy_Wh, battV);
 
-    sendMessage(msg);
-    if (abs(energy_Wh - lastSavedEnergy) > 0.1) {
+    // Clamp values as before
+    if (Vrms > 999999) Vrms = 999999; 
+    if (Vrms < -999999) Vrms = -999999;
+    if (Irms > 999999) Irms = 999999;
+    if (Irms < -999999) Irms = -999999;
+    if (power > 9999999) power = 9999999;
+    if (power < -9999999) power = -9999999;
+    if (battV > 9999) battV = 9999;
+    if (battV < -9999) battV = -9999;
+    if (battV < 2.0) {
+        errorBlink(1); // Battery too low
+        return;
+    }
+
+    // Prepare binary payload: [ID (1 byte)][Vrms][Irms][Power][Energy_Wh][BattV] (all 4 bytes each)
+    uint8_t payload[1 + 5 * 4];
+    payload[0] = (uint8_t)DEVICE_ID;
+    int32_t* data = (int32_t*)&payload[1];
+    data[0] = (int32_t)(Vrms * 100);      // e.g., 23056 for 230.56V
+    data[1] = (int32_t)(Irms * 1000);     // e.g., 1234 for 1.234A
+    data[2] = (int32_t)(power * 100);     // e.g., 56789 for 567.89W
+    data[3] = (int32_t)(energy_Wh * 100); // e.g., 12345 for 123.45Wh
+    data[4] = (int32_t)(battV * 100);     // e.g., 370 for 3.70V
+
+    sendMessage((const char*)payload, sizeof(payload));
+
+    if (energy_Wh - lastSavedEnergy >= 0.01) {
         saveEnergyToEEPROM();
         lastSavedEnergy = energy_Wh;
     }
+
     // Sleep ~5 minutes using watchdog in 8s chunks
     for (int i = 0; i < SLEEP_CYCLES; i++)
     {

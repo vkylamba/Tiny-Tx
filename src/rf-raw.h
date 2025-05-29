@@ -75,9 +75,9 @@ void setupRFRaw() {
   pinMode(TX_PIN, OUTPUT);
 }
 
-void sendRFRawMessage(const char* msg) {
+void sendRFRawMessage(const char* msg, size_t len=0) {
   uint16_t crc = crc16(msg);
-  uint16_t msgLength = strlen(msg);
+  uint16_t msgLength = len == 0 ? strlen(msg) : len;
   for(int i = 0; i < REPEAT; i++) {
     sendRFMessageRaw(msg, msgLength, crc); // Send start byte
     delay(100); // Wait before sending the next message
